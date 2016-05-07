@@ -1161,6 +1161,9 @@ class TestRebuiltSchema(MOFTest):
     """Test of load of full DMTF CIM Schema.  Only confirms that
        the schema loads and proper number of qualifier types and
        classes are loaded.
+       This test included because there is an error in the recompile
+       within the same test. Somewhere during the compile, the
+       lexer gets lost.
     """
 
     def test_all(self):
