@@ -28,7 +28,7 @@ from pywbem.cim_operations import CIMError
 from pywbem.mof_compiler import MOFCompiler, MOFWBEMConnection, MOFParseError
 from pywbem.cim_constants import *
 from pywbem.cim_obj import CIMClass, CIMProperty, CIMQualifier, \
-                           CIMMethod, CIMQualifierDeclaration
+                           CIMQualifierDeclaration
 from pywbem import mof_compiler
 
 from unittest_extensions import CIMObjectMixin
@@ -47,7 +47,7 @@ CIM_SCHEMA_MOF = 'cim_schema_2.45.0.mof'
 TOTAL_QUALIFIERS = 70       # These may change for each schema release
 TOTAL_CLASSES = 1621
 
-TMP_FILE = 'test_tomofRoundTripOutput.mof'
+TMP_FILE = 'test_mofRoundTripOutput.mof'
 
 def setUpModule():
     """ Setup the unittest. Includes possibly getting the
@@ -290,7 +290,7 @@ class TestPropertyAlternatives(MOFTest):
     #     parameter alternatives one by one.
 
 class TestRefs(MOFTest):
-    """Test for valie References in mof"""
+    """Test for valid References in mof"""
 
     def test_all(self):
         self.mofcomp.compile_file(os.path.join(SCRIPT_DIR,
@@ -1004,8 +1004,10 @@ class TestFullSchemaRoundTrip(MOFTest):
     """ Test compile, mof generation, and recompile"""
     # TODO: When this works combine into the previous test to save test time
 
-    def setupCompilerForReCompile(self):
-        """Setup a second compiler instance for recompile"""
+    def setupCompilerForReCompile(self, debug=False):
+        """Setup a second compiler instance for recompile. Result is
+           mofcomp2
+        """
         def moflog2(msg):
             """Display message to moflog"""
             print(msg, file=self.logfile2)
@@ -1015,10 +1017,12 @@ class TestFullSchemaRoundTrip(MOFTest):
 
         self.mofcomp2 = MOFCompiler(
             MOFWBEMConnection(),
-            search_paths=None, verbose=True,
+            search_paths=None, verbose=debug,
             log_func=moflog2)
         # TODO: ks 4/16. Change above to verbose=False
 
+    # TODO ks 4/16. The following is temporary while we sort out differences
+    # between the original file and the recompiled file.
     def compareClasses(self, co, cn):
         """ compare two classes and show differences.
             Temporary until we can completely roundtrip"""
@@ -1085,7 +1089,7 @@ class TestFullSchemaRoundTrip(MOFTest):
         mofout_filename = os.path.join(SCRIPT_DIR, TMP_FILE)
         mof_out_hndl = open(mofout_filename, 'w')
         qual_decls = repo.qualifiers[NAME_SPACE]
-        # create a new mof file with the qualifiers and classes
+
         for qd in sorted(repo.qualifiers[NAME_SPACE].values()):
             print(qd.tomof(), file=mof_out_hndl)
         classes = repo.classes[NAME_SPACE]
@@ -1093,8 +1097,11 @@ class TestFullSchemaRoundTrip(MOFTest):
             print(classes[cl_].tomof(),
                   file=mof_out_hndl)
 
-        # compile the created mof output file
-        self.setupCompilerForReCompile()
+        # Compile the created mof output file.
+        # Setup new compiler instance to avoid changing the data in
+        # the first instance. Classes, etc. from the first are
+        # needed for compare with recompile
+        self.setupCompilerForReCompile(True)
 
         repo2 = self.mofcomp2.handle
 
@@ -1104,10 +1111,16 @@ class TestFullSchemaRoundTrip(MOFTest):
         except MOFParseError as pe:
             print(pe)
 
+        # confirm lengths for qualifiers compiled, orig and recompile
         self.assertEqual(len(repo2.qualifiers[NAME_SPACE]),
                          TOTAL_QUALIFIERS)
         self.assertEqual(len(qual_decls),
                          len(repo2.qualifiers[NAME_SPACE]))
+        for qd in sorted(qual_decls.values()):
+            nextqd = repo2.qualifiers[NAME_SPACE][qd.name]
+            #self.assertTrue(isinstance(nextqd, CIMQualifierDeclaration))
+            #self.assertTrue(isinstance(qd, CIMQualifierDeclaration))
+            self.assertTrue(nextqd, qd)
 
         #self.assertEqual(len(repo2.classes[NAME_SPACE]),
         #                 TOTAL_CLASSES)
@@ -1115,19 +1128,13 @@ class TestFullSchemaRoundTrip(MOFTest):
         ## TODO ks 4/16 enable this test after commit of pr #260
         #self.assertEqual(len(orig_classes),
         #                 len(repo2.classes[NAME_SPACE]))
-        # TODO the following is a temporary replacement to avoid
+        # TODO ks 4/16 following is a temporary replacement to avoid
         # test failure
         rebuild_error = False
         if len(classes) != len(repo2.classes[NAME_SPACE]):
             print('Error: Class counts do not match. Orig=%s, recompile=%s' \
                 % (len(classes), len(repo2.classes[NAME_SPACE])))
             rebuild_error = True
-
-        for qd in sorted(qual_decls.values()):
-            nextqd = repo2.qualifiers[NAME_SPACE][qd.name]
-            #self.assertTrue(isinstance(nextqd, CIMQualifierDeclaration))
-            #self.assertTrue(isinstance(qd, CIMQualifierDeclaration))
-            self.assertTrue(nextqd, qd)
 
         for cl_ in classes:
             orig_class = classes[cl_]
@@ -1150,6 +1157,24 @@ class TestFullSchemaRoundTrip(MOFTest):
 
         if not rebuild_error:
             os.remove(mofout_filename)
+class TestRebuiltSchema(MOFTest):
+    """Test of load of full DMTF CIM Schema.  Only confirms that
+       the schema loads and proper number of qualifier types and
+       classes are loaded.
+    """
 
+    def test_all(self):
+        """Test compile of schema and compare with known constants"""
+        start_time = time()
+        mofout_filename = os.path.join(SCRIPT_DIR, TMP_FILE)
+        self.mofcomp.compile_file(mofout_filename, NAME_SPACE)
+
+        print('recompile elapsed: %f  ' % (time() - start_time))
+
+        # TODO Number of qualifiers and classes is schema version dependent
+        self.assertEqual(len(self.mofcomp.handle.qualifiers[NAME_SPACE]),
+                         TOTAL_QUALIFIERS)
+        self.assertEqual(len(self.mofcomp.handle.classes[NAME_SPACE]),
+                         TOTAL_CLASSES)
 if __name__ == '__main__':
     unittest.main()

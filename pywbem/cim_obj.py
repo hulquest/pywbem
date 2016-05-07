@@ -417,6 +417,7 @@ class NocaseDict(object):
 
     @staticmethod
     def __ordering_deprecated():
+        """Issue deprecated msg on ordering"""
         warnings.warn(
             "Ordering comparisons for pywbem.NocaseDict are deprecated",
             DeprecationWarning)
@@ -2528,6 +2529,9 @@ class CIMProperty(_CIMComparisonMixin):
             else:
                 val_ = value_
             _mof = mofstr(val_, indent=indent)
+
+        elif self.type == 'datetime':
+            _mof = '"%s"' % str(value_)
 
         else:
             _mof = str(value_)
